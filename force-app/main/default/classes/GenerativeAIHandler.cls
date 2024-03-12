@@ -11,6 +11,7 @@ public with sharing class GenerativeAIHandler {
         HttpResponse response = http.send(request);
         String body = response.getBody();
         System.debug(body);
+        
         return new List<String>{body};	          
     }
 }
