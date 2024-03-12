@@ -13,6 +13,8 @@ public with sharing class MessagingSessionHandler {
         if(messagingSessionList.size()>0){
             update messagingSessionList;
         }
+
+        //test
     }
 
     public static String constructHistory(String oldHistory, String inputString, String conversationType){
