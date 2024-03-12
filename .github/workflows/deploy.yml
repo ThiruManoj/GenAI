@@ -133,6 +133,8 @@ jobs:
     validate-against-production-org:
         runs-on: ubuntu-latest
         needs: [build, validate-against-uat-org]
+        environment:
+            name: DEV
         steps:
             # Get the key from Github variables
             - name: Get JWT private token  
