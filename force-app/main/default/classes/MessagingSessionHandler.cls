@@ -1,4 +1,4 @@
-public without sharing class MessagingSessionHandler {
+public with sharing class MessagingSessionHandler {
     
     @InvocableMethod(Label ='Save Conversation History' description='save conversation history')
     public static void saveConversationHistory(List<Requests> requests){
