@@ -3,17 +3,17 @@ name: Manual - Validate Changes
 
 # Definition when the workflow should run
 on:
-    # The workflow will run whenever an event happens on a pull request
+    # The workflow will be run manually
     workflow_dispatch:
-        inputs:
-          from_commit:
-            description: 'From Commit'
-            required: true
-            type: string
-          to_commit:
-            description: 'To Commit'
-            required: true
-            type: string
+      inputs:
+        from_commit:
+          description: 'From Commit'
+          required: true
+          type: string
+        to_commit:
+          description: 'To Commit'
+          required: true
+          type: string
             
 
 # Jobs to be executed when the above conditions are met
