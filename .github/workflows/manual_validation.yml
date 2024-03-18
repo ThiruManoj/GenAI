@@ -92,6 +92,13 @@ jobs:
                   export APEX_CLASSES=$(xq . < changed-sources/package/package.xml | jq '.Package.types | [.] | flatten | map(select(.name=="ApexClass")) | .[] | .members | [.] | flatten | map(select(. | index("*") | not)) | map(select(. | index("TEST") | not)) | map("%" + . + "%") | unique | join(",")' -r)
                   export APEX_TEST_CLASSES=$(xq . < changed-sources/package/package.xml | jq '.Package.types | [.] | flatten | map(select(.name=="ApexClass")) | .[] | .members | [.] | flatten | map(select(. | index("*") | not)) |  map(select(. | index("TEST")))  | unique | join(",")' -r)
                   echo $APEX_CLASSES
+
+            #Archive delta changes so that we can check that in artifacts
+            - name: Archive Delta Changes
+              uses: actions/upload-artifact@v4
+              with:
+                  name: delta-changes
+                  path: changed-sources
             
             # Install SFDX scanner
             - name: 'Installing SFDX scanner'
@@ -136,4 +143,4 @@ jobs:
             - name: 'Check-only deploy delta changes - run all tests'
               run: |
                 sf project deploy start --source-dir "changed-sources/force-app" --dry-run --ignore-conflicts --test-level RunLocalTests --target-org "${{ github.event.inputs.environment }}" --json
-              # sf project deploy start --source-dir "changed-sources/force-app" --dry-run --ignore-conflicts --test-level RunSpecifiedTests --tests $APEX_CLASSES --target-org JetstarSIT --json
+              # sf project deploy start --source-dir "changed-sources/force-app" --dry-run --ignore-conflicts --test-level RunSpecifiedTests --tests $APEX_CLASSES --target-org "${{ github.event.inputs.environment }}" --json
