@@ -1,4 +1,5 @@
-public without sharing class MessagingSessionHandler {
+//Class to handle flow
+public with sharing class MessagingSessionHandler {
     
     @InvocableMethod(Label ='Save Conversation History' description='save conversation history')
     public static void saveConversationHistory(List<Requests> requests){
@@ -13,8 +14,6 @@ public without sharing class MessagingSessionHandler {
         if(messagingSessionList.size()>0){
             update messagingSessionList;
         }
-
-        //test
     }
 
     public static String constructHistory(String oldHistory, String inputString, String conversationType){

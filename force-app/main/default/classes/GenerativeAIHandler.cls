@@ -1,4 +1,4 @@
-public with sharing class GenerativeAIHandler {
+public without sharing class GenerativeAIHandler {
 
     @InvocableMethod(Label ='Get AI Response' description='return AI response' callout=true)
     public static List<String> getAIResponse(List<String> question){
