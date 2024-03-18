@@ -1,0 +1,129 @@
+# Unique name for this workflow
+name: SIT - Validate Changes
+
+# Definition when the workflow should run
+on:
+    # The workflow will run whenever an event happens on a pull request
+    workflow_dispatch:
+    inputs:
+      from_commit:
+        description: 'From Commit'
+        required: true
+        type: string
+      to_commit:
+        description: 'To Commit'
+        required: true
+        type: string
+      
+      branches: [ develop ]
+      # We only care about changes to the force-app directory, which is the
+      # root directory of the sfdx project. This prevents the job from running
+      # when changing non-salesforce files (like this yml file).
+      paths:
+        - 'force-app/**'
+            
+
+# Jobs to be executed when the above conditions are met
+jobs:
+    # This is the name of the job. You can give it whatever name you want
+    validate-on-sit-and-code-scan:
+        # As mentioned in the blog post, this job runs inside a VM. Here we
+        # can specify which OS this VM should run on. 
+        # In this case, we are going to run our commands on the latest version
+        # of ubuntu
+        runs-on: ubuntu-latest
+        steps:
+            # Now we install nodejs in the VM, and specify version 14
+            - uses: actions/setup-node@v4
+              with:
+                node-version: '18'
+
+            # The idea is that the VM can access your remote repository
+            # because your repository is an sfdx project.
+            # This is a default action that allows us to enter the root 
+            # directory of the repository
+
+            # Make sure to specify fetch-depth:0. This allows us to
+            # access previous commits that have been pushed to the repository.
+
+            # We'll need this later when we try to figure out which metadata has 
+            # changed between commits, so that we can only deploy that metadata
+            # to the destination org
+
+            - name: 'Checkout source code'
+              uses: actions/checkout@v3
+              with:
+                fetch-depth: 0
+
+            # Now Install Salesforce CLI
+            - name: 'Install Salesforce CLI'
+              run: |
+                  npm install @salesforce/cli --location=global
+                  nodeInstallPath=$(npm config get prefix)
+                  echo "$nodeInstallPath/bin" >> $GITHUB_PATH
+                  sf --version
+
+            # Then we install the SFDX-Git-Delta plugin - https://github.com/scolladon/sfdx-git-delta
+            # This is an awesome plugin that allows us to extract a package.xml with the metadata
+            # that has changed between commits. I highly recommend going over the github readme 
+            # for more information on how this works.
+
+            - name: 'Installing sfdx git delta'
+              run: | 
+                  echo y | sf plugins install sfdx-git-delta
+
+            # Install utilities - yq to parse package.xml and find apex classes and test class names
+            - name: Install utilities - yq
+              run: |
+                pip install yq
+                xq --version
+
+            # We use SFDX Git Delta to create a directory with only the metadata that has changed.
+            # this allows us to deploy only those changes, as opposed to deploying the entire branch. 
+            # This helps reducing deployment times
+            - name: 'Create delta packages for new, modified or deleted metadata'
+              run: | 
+                  mkdir changed-sources
+                  sf sgd:source:delta --to "${{ github.event.inputs.to_commit }}" --from "${{ github.event.inputs.from_commit }}" --output changed-sources/ --generate-delta --source force-app/ 
+                  cat changed-sources/package/package.xml
+                  echo
+                  echo "--- Apex Tests to be executed ---"
+                  export APEX_CLASSES=$(xq . < changed-sources/package/package.xml | jq '.Package.types | [.] | flatten | map(select(.name=="ApexClass")) | .[] | .members | [.] | flatten | map(select(. | index("*") | not)) | map(select(. | index("TEST") | not)) | map("%" + . + "%") | unique | join(",")' -r)
+                  export APEX_TEST_CLASSES=$(xq . < changed-sources/package/package.xml | jq '.Package.types | [.] | flatten | map(select(.name=="ApexClass")) | .[] | .members | [.] | flatten | map(select(. | index("*") | not)) |  map(select(. | index("TEST")))  | unique | join(",")' -r)
+                  echo $APEX_CLASSES
+            
+            # Install SFDX scanner
+            - name: 'Installing SFDX scanner'
+              run: sf plugins install @salesforce/sfdx-scanner@latest
+
+            # Now we can use the sfdx scanner to scan the code in the delta directory
+            # The output of the scan is stored in a file called salesforce-code-analyzer-results
+
+            - name: Run Salesforce Code Analyzer
+              id: run-code-analyzer
+              uses: forcedotcom/run-code-analyzer@v1
+              with:
+                run-command: run
+                run-arguments: --engine "pmd,eslint-lwc" --normalize-severity --target changed-sources/force-app --outfile results.html
+                results-artifact-name: salesforce-code-analyzer-results
+
+            - name: Check the outputs to determine whether to fail
+              if: |
+                steps.run-code-analyzer.outputs.exit-code > 0 ||
+                steps.run-code-analyzer.outputs.num-sev1-violations > 0
+               #steps.run-code-analyzer.outputs.num-violations > 10
+              run: exit 1
+
+            # Get the key from Github variables
+            - name: Get JWT private token  
+              run: echo "${{ secrets.SALESFORCE_JWT_SECRET_KEY }}" > server.key
+
+            # Authenticate to the salesforce org using JWT token 
+            - name: Authenticate to Salesforce Org using JWT 
+              run: sf org login jwt --client-id ${{ secrets.SALESFORCE_CONSUMER_KEY_SIT }} --jwt-key-file server.key --username ${{ secrets.SALESFORCE_USER_NAME_SIT }} --alias JetstarSIT
+            
+            # We do a check-only deploy
+            - name: 'Check-only deploy delta changes - run all tests'
+              run: |
+                sf project deploy start --source-dir "changed-sources/force-app" --dry-run --ignore-conflicts --test-level RunLocalTests --target-org JetstarSIT --json
+              # sf project deploy start --source-dir "changed-sources/force-app" --dry-run --ignore-conflicts --test-level RunSpecifiedTests --tests $APEX_CLASSES --target-org JetstarSIT --json
