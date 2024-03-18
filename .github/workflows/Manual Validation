@@ -5,22 +5,15 @@ name: Manual - Validate Changes
 on:
     # The workflow will run whenever an event happens on a pull request
     workflow_dispatch:
-    inputs:
-      from_commit:
-        description: 'From Commit'
-        required: true
-        type: string
-      to_commit:
-        description: 'To Commit'
-        required: true
-        type: string
-      
-      branches: [ develop ]
-      # We only care about changes to the force-app directory, which is the
-      # root directory of the sfdx project. This prevents the job from running
-      # when changing non-salesforce files (like this yml file).
-      paths:
-        - 'force-app/**'
+        inputs:
+          from_commit:
+            description: 'From Commit'
+            required: true
+            type: string
+          to_commit:
+            description: 'To Commit'
+            required: true
+            type: string
             
 
 # Jobs to be executed when the above conditions are met
