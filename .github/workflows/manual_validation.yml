@@ -3,24 +3,25 @@ name: Manual - Validate Changes
 
 # Definition when the workflow should run
 on:
-    # The workflow will run whenever an event happens on a pull request
+    # The workflow will be run manually
     workflow_dispatch:
-    inputs:
-      from_commit:
-        description: 'From Commit'
-        required: true
-        type: string
-      to_commit:
-        description: 'To Commit'
-        required: true
-        type: string
-      
-      branches: [ develop ]
-      # We only care about changes to the force-app directory, which is the
-      # root directory of the sfdx project. This prevents the job from running
-      # when changing non-salesforce files (like this yml file).
-      paths:
-        - 'force-app/**'
+      inputs:
+        from_commit:
+          description: 'From Commit'
+          required: true
+          type: string
+        to_commit:
+          description: 'To Commit'
+          required: true
+          type: string
+        environment:
+          description: 'Salesforce Org'
+          required: true
+          type: choice
+          options:
+          - SIT
+          - UAT
+          - PROD 
             
 
 # Jobs to be executed when the above conditions are met
@@ -119,11 +120,20 @@ jobs:
               run: echo "${{ secrets.SALESFORCE_JWT_SECRET_KEY }}" > server.key
 
             # Authenticate to the salesforce org using JWT token 
-            - name: Authenticate to Salesforce Org using JWT 
-              run: sf org login jwt --client-id ${{ secrets.SALESFORCE_CONSUMER_KEY_SIT }} --jwt-key-file server.key --username ${{ secrets.SALESFORCE_USER_NAME_SIT }} --alias JetstarSIT
+            - name: Authenticate to Salesforce Org using JWT - SIT 
+              if: "${{ github.event.inputs.environment == 'SIT'}}" 
+              run: sf org login jwt --client-id ${{ secrets.SALESFORCE_CONSUMER_KEY_SIT }} --jwt-key-file server.key --username ${{ secrets.SALESFORCE_USER_NAME_SIT }} --alias "${{ github.event.inputs.environment }}"
             
+            - name: Authenticate to Salesforce Org using JWT - UAT
+              if: "${{ github.event.inputs.environment == 'UAT'}}" 
+              run: sf org login jwt --client-id ${{ secrets.SALESFORCE_CONSUMER_KEY_UAT }} --jwt-key-file server.key --username ${{ secrets.SALESFORCE_USER_NAME_UAT }} --alias "${{ github.event.inputs.environment }}"
+
+            - name: Authenticate to Salesforce Org using JWT - PROD 
+              if: "${{ github.event.inputs.environment == 'PROD'}}" 
+              run: sf org login jwt --client-id ${{ secrets.SALESFORCE_CONSUMER_KEY_PROD }} --jwt-key-file server.key --username ${{ secrets.SALESFORCE_USER_NAME_PROD }} --alias "${{ github.event.inputs.environment }}"
+
             # We do a check-only deploy
             - name: 'Check-only deploy delta changes - run all tests'
               run: |
-                sf project deploy start --source-dir "changed-sources/force-app" --dry-run --ignore-conflicts --test-level RunLocalTests --target-org JetstarSIT --json
+                sf project deploy start --source-dir "changed-sources/force-app" --dry-run --ignore-conflicts --test-level RunLocalTests --target-org "${{ github.event.inputs.environment }}" --json
               # sf project deploy start --source-dir "changed-sources/force-app" --dry-run --ignore-conflicts --test-level RunSpecifiedTests --tests $APEX_CLASSES --target-org JetstarSIT --json
